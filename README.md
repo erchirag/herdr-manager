@@ -1,84 +1,85 @@
-# Herdr Manager
+# Herdr Manager Agent
 
-A local control plane for all Copilot sessions running in Herdr. It gives a manager Copilot and the user the same view of:
+Herdr Manager is an installable custom agent for GitHub Copilot CLI. It turns one Copilot session into the conversational control plane for every coding agent running in the current Herdr session.
 
-- every open workspace and its working directory
-- agent lifecycle state (`working`, `blocked`, `idle`, `done`, or `unknown`)
-- the high-level task inferred from Herdr's terminal title
-- projects with no active agent
-- recent terminal output and basic focus, prompt, and close controls
-- spawning a named Copilot session in a new tab of an existing workspace
-
-## Run
-
-Requirements: Node.js 20+ and a running Herdr server with the `herdr` CLI on `PATH`.
-
-```powershell
-npm start
-```
-
-Open `http://127.0.0.1:4317`. Set `PORT` or `HOST` to override the listener. The default loopback binding intentionally keeps the unauthenticated control API local.
-
-The manager uses Herdr's CLI wrappers rather than directly opening the Windows named pipe. This follows Herdr's portability guidance and keeps protocol/version handling in the installed Herdr binary.
-
-## Agent-facing API
-
-The dashboard is backed by a small HTTP API that the manager Copilot can call directly:
-
-| Method | Route | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/health` | Service status |
-| `GET` | `/api/snapshot` | Enriched workspace and agent inventory |
-| `POST` | `/api/spawn` | Create a tab and start Copilot in an existing workspace |
-| `POST` | `/api/agents/:paneId/prompt` | Send a prompt |
-| `POST` | `/api/agents/:paneId/focus` | Focus the agent in Herdr |
-| `GET` | `/api/agents/:paneId/output` | Read recent unwrapped terminal output as a normalized object with `text` |
-| `DELETE` | `/api/tabs/:tabId` | Close a tab and its processes |
-
-Spawn example:
-
-```powershell
-$body = @{
-  workspaceId = "w2"
-  name = "api-reviewer"
-  tabLabel = "API review"
-  task = "Review the API changes and report actionable issues."
-  focus = $false
-} | ConvertTo-Json
-
-Invoke-RestMethod http://127.0.0.1:4317/api/spawn `
-  -Method Post -ContentType application/json -Body $body
-```
-
-The spawn operation is transactional where possible: if Copilot cannot start in the newly created tab, the manager attempts to close that tab and returns the original Herdr error. If Copilot starts but the initial prompt fails, the session is preserved and the response includes `promptError`.
-
-## Architecture
+There is no web dashboard or background service. Select the custom agent and talk to it directly:
 
 ```text
-Browser dashboard / manager Copilot
-                 |
-          localhost HTTP
-                 |
-       Node.js manager service
-                 |
-       herdr CLI JSON wrappers
-                 |
-        Herdr local socket API
+Show me every workspace and what each agent is doing.
+Start a Copilot in the api workspace and ask it to review authentication.
+Which projects are empty?
+Wait for the reviewer and summarize its result.
+Focus the agent that is blocked.
 ```
 
-The MVP polls `session.snapshot` every three seconds. Herdr documents snapshots as authoritative current state, which makes polling simple and resilient. A later version can use a long-lived `events.subscribe` connection as an invalidation signal, then reconcile through a fresh snapshot after events, reconnects, or `events_lost`.
+The manager uses the installed `herdr` CLI, which is Herdr's portable wrapper over its local socket API.
 
-## Safety
+## Install in GitHub Copilot CLI
 
-- The server binds to `127.0.0.1` by default and does not enable CORS.
-- Herdr commands use argv execution without a shell.
-- IDs and agent names are validated before invoking Herdr.
-- Closing a tab requires browser confirmation.
-- Spawn only targets a workspace that exists in the current authoritative snapshot.
+Add this repository as a marketplace:
+
+```powershell
+copilot plugin marketplace add erchirag/herdr-manager
+copilot plugin install herdr-manager@herdr-manager-marketplace
+```
+
+Start Copilot with the manager as the primary agent:
+
+```powershell
+copilot --agent "herdr-manager:herdr-manager"
+```
+
+In an existing interactive session, run `/agent`, select **herdr-manager:herdr-manager**, and then send your request. Restart Copilot after the first installation so the agent is discovered.
+
+For local development, register the repository as a local marketplace:
+
+```powershell
+copilot plugin marketplace add .
+copilot plugin install herdr-manager@herdr-manager-marketplace
+```
+
+Local marketplace plugins load live from the repository. Edits take effect in the next Copilot session without reinstalling.
+
+## Requirements
+
+- A running Herdr server.
+- The manager Copilot session must be launched inside a Herdr-managed pane, with `HERDR_ENV=1`.
+- The `herdr` executable must be available on `PATH`.
+- Copilot must already be authenticated if the manager will start Copilot agents.
+
+## What the agent does
+
+- Builds an authoritative inventory from `herdr api snapshot`.
+- Reports workspace, tab, pane, cwd, focused state, agent type, lifecycle state, and high-level task title.
+- Calls out empty workspaces and agents that are blocked, working, done, idle, or unknown.
+- Creates a new tab in an existing workspace and starts a named Copilot session.
+- Sends prompts, waits for lifecycle changes, reads recent output, focuses sessions, and coordinates multiple agents.
+- Preserves user focus for background work unless explicitly asked otherwise.
+- Requires explicit confirmation before destructive operations or answering an agent's approval prompt.
+
+## Repository layout
+
+```text
+.github/plugin/marketplace.json             Copilot marketplace catalog
+plugins/herdr-manager/plugin.json           Agent Plugins 1.0 manifest
+plugins/herdr-manager/com.github.copilot/    Copilot custom agent
+plugins/herdr-manager/skills/                Portable Herdr control skill
+```
 
 ## Validate
 
 ```powershell
 npm run check
-npm test
 ```
+
+You can also test discovery without using the hosted marketplace:
+
+```powershell
+copilot plugin marketplace add .
+copilot plugin install herdr-manager@herdr-manager-marketplace
+copilot plugin list
+```
+
+## Safety model
+
+The manager never predicts Herdr IDs, relies on another client's focused pane, or closes resources implicitly. It parses IDs from Herdr's JSON responses, uses `--no-focus` for background creation, and inspects blocked agent output before requesting a decision.

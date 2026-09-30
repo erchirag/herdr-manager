@@ -1,14 +1,12 @@
 {
   "name": "herdr-manager",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Local control plane for Herdr workspaces and Copilot sessions",
+  "description": "Marketplace package for the Herdr Manager custom agent",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "test": "node --test",
-    "check": "node --check src/server.js && node --check src/herdr.js && node --check src/model.js && node --check public/app.js"
+    "check": "node scripts/validate.mjs",
+    "test": "node scripts/validate.mjs"
   },
   "engines": {
     "node": ">=20"

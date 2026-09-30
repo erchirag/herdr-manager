@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "herdr-manager",
+  "version": "1.0.0",
+  "description": "A conversational control plane for coding agents running in Herdr",
+  "author": {
+    "name": "Chirag Gupta"
+  },
+  "homepage": "https://github.com/erchirag/herdr-manager",
+  "repository": "https://github.com/erchirag/herdr-manager",
+  "license": "MIT",
+  "keywords": [
+    "herdr",
+    "agents",
+    "copilot",
+    "orchestration",
+    "terminal"
+  ]
+}

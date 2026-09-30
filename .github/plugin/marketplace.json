@@ -1,0 +1,18 @@
+{
+  "name": "herdr-manager-marketplace",
+  "owner": {
+    "name": "Chirag Gupta"
+  },
+  "metadata": {
+    "description": "Installable agents and skills for managing Herdr coding-agent sessions",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "herdr-manager",
+      "description": "A conversational manager for all coding agents running in Herdr",
+      "version": "1.0.0",
+      "source": "./plugins/herdr-manager"
+    }
+  ]
+}
